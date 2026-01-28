@@ -150,16 +150,16 @@ Includes (in SETUP.md):
    ```bash
    # Prisma
    npm install prisma @prisma/client
-   
+
    # NextAuth.js
    npm install next-auth@beta @auth/prisma-adapter
-   
+
    # Validation
    npm install zod
-   
+
    # UI
    npx shadcn-ui@latest init
-   
+
    # Utilities
    npm install date-fns sonner recharts lucide-react
    ```
