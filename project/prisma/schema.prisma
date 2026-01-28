@@ -1,0 +1,194 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator erd {
+  provider = "prisma-erd-generator"
+  output = "./prisma/ERD.svg"  // Or .png, .pdf, .md
+  theme = "forest"  // Options: default, forest, dark, neutral
+}
+
+// User Model
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  emailVerified     DateTime?
+  name              String?
+  password          String?   // Hashed password for local auth
+  avatar            String?
+  role              Role      @default(END_CUSTOMER)
+  twoFactorSecret   String?
+  twoFactorEnabled  Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  accounts          Account[]
+  sessions          Session[]
+  organizations     UserOrganization[]
+  notifications     Notification[]
+  friendsInitiated  Friend[]  @relation("FriendInitiator")
+  friendsReceived   Friend[]  @relation("FriendReceiver")
+}
+
+// NextAuth.js Account Model
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+// NextAuth.js Session Model
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Organization Model (Multi-tenant)
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  plan        String   @default("free")
+  settings    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users       UserOrganization[]
+  campaigns   Campaign[]
+}
+
+// User-Organization Relationship (with roles)
+model UserOrganization {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  role           OrgRole      @default(MEMBER)
+  createdAt      DateTime     @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+}
+
+// Campaign Model
+model Campaign {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  status         CampaignStatus @default(DRAFT)
+  metrics        Json?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+}
+
+// Lead Model
+model Lead {
+  id         String   @id @default(cuid())
+  campaignId String
+  email      String
+  status     String
+  source     String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  events   Event[]
+}
+
+// Event Model (for analytics)
+model Event {
+  id        String   @id @default(cuid())
+  leadId    String
+  type      String
+  metadata  Json?
+  timestamp DateTime @default(now())
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+}
+
+// Notification Model
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Friend Model
+model Friend {
+  id          String       @id @default(cuid())
+  userId      String
+  friendId    String
+  status      FriendStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+
+  user   User @relation("FriendInitiator", fields: [userId], references: [id], onDelete: Cascade)
+  friend User @relation("FriendReceiver", fields: [friendId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+}
+
+// Enums
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  CONSULTANT
+  END_CUSTOMER
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum FriendStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
