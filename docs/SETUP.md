@@ -810,5 +810,5 @@ npx shadcn-ui@latest add card
 
 ---
 
-**Project maintained by the ft_transcendence team**  
+**Project maintained by the ft_transcendence team**
 For questions or issues, contact the team via Discord or GitHub Issues.

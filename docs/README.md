@@ -382,5 +382,5 @@ npx shadcn-ui@latest add form      # Add form
 
 ---
 
-*Last updated: January 28, 2026*  
+*Last updated: January 28, 2026*
 *Maintained by the ft_transcendence team*

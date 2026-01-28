@@ -482,10 +482,10 @@ If your issue isn't listed here:
    ```bash
    # Next.js logs
    npm run dev
-   
+
    # Docker logs
    docker-compose logs -f
-   
+
    # Prisma logs
    DEBUG="prisma:*" npm run dev
    ```

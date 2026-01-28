@@ -284,6 +284,6 @@ This documentation will evolve as the project progresses. Team members should:
 
 ---
 
-*Created: January 28, 2026*  
-*Last Updated: January 28, 2026*  
+*Created: January 28, 2026*
+*Last Updated: January 28, 2026*
 *Maintained by: ft_transcendence team*
