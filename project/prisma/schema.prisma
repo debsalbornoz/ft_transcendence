@@ -10,14 +10,15 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
-generator erd {
-  provider = "prisma-erd-generator"
-  output = "./prisma/ERD.svg"  // Or .png, .pdf, .md
-  theme = "forest"  // Options: default, forest, dark, neutral
-}
+// ERD generator - uncomment to generate ER diagrams
+// Requires: npm install -D prisma-erd-generator
+// generator erd {
+//   provider = "prisma-erd-generator"
+//   output = "./prisma/ERD.svg"
+//   theme = "forest"
+// }
 
 // User Model
 model User {
