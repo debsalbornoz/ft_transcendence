@@ -341,6 +341,6 @@ npx prisma migrate reset
 
 ---
 
-**Last Updated:** January 30, 2026  
-**Database Version:** PostgreSQL 16  
+**Last Updated:** January 30, 2026
+**Database Version:** PostgreSQL 16
 **Prisma Version:** 7.3.0
