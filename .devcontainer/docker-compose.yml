@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../:/workspace:cached
+      - /workspace/node_modules
+      - /workspace/.next
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://transcendence:transcendence@postgres:5432/transcendence
+    depends_on:
+      - postgres
+    networks:
+      - ft_network
+    command: /bin/bash -c "while sleep 1000; do :; done"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: transcendence
+      POSTGRES_PASSWORD: transcendence
+      POSTGRES_DB: transcendence
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - ft_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transcendence -d transcendence"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+
+networks:
+  ft_network:
+    driver: bridge

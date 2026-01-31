@@ -1,0 +1,75 @@
+{
+  "name": "ft_transcendence",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+
+  "forwardPorts": [3000, 5432],
+  "portsAttributes": {
+    "3000": {
+      "label": "Next.js App",
+      "onAutoForward": "notify"
+    },
+    "5432": {
+      "label": "PostgreSQL",
+      "onAutoForward": "silent"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "prisma.prisma",
+        "GitHub.copilot",
+        "ms-vscode-remote.remote-containers",
+        "ms-vscode-remote.remote-wsl",
+        "ms-vscode.makefile-tools",
+        "Gruntforcevem.vscode-postgres"
+      ],
+      "settings": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.fixAll.eslint": "explicit"
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "[typescriptreact]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode"
+        },
+        "files.watcherExclude": {
+          "**/node_modules/**": true,
+          "**/.next/**": true,
+          "**/dist/**": true
+        }
+      }
+    }
+  },
+
+  "remoteEnv": {
+    "NODE_ENV": "development"
+  },
+
+  "remoteUser": "node",
+  "updateRemoteUserUID": false,
+
+  "postCreateCommand": "sudo chown -R node:node /workspace && cd /workspace/project && npm install && npx prisma generate",
+
+  "postStartCommand": "cd /workspace/project && npm run dev",
+
+  "mounts": [
+    "source=${localEnv:HOME}/.ssh,target=/home/node/.ssh,readonly"
+  ]
+}
