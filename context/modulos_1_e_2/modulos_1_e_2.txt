@@ -1,0 +1,278 @@
+CONTEXTO ARQUITETURAL — NÚCLEO MULTI-TENANT E RBAC
+
+Este sistema é um SaaS multi-tenant, onde um único sistema atende múltiplas empresas,
+garantindo isolamento lógico de dados, segurança e controle de acesso por empresa.
+
+O controle de acesso é baseado em RBAC (Role-Based Access Control), onde usuários
+recebem papéis (roles) dentro de uma empresa, e esses papéis determinam quais ações
+(permissões) podem ser executadas.
+
+As tabelas descritas abaixo formam o núcleo estrutural do sistema. Elas definem:
+- quem é a empresa
+- quem é o usuário
+- em quais empresas o usuário atua
+- quais funções ele exerce
+- quais ações ele pode executar
+
+
+------------------------------------------------------------
+core.Tenants
+------------------------------------------------------------
+
+Representa cada empresa (cliente) da plataforma.
+É a raiz do modelo multi-tenant.
+
+Tudo que é dado de negócio no sistema pertence a um tenant. O tenant_id define
+o escopo de isolamento, garantindo que dados de uma empresa não se misturem
+com dados de outra.
+
+Atributos:
+
+tenant_id
+Identificador interno do tenant.
+Existe para ser a chave raiz usada como FK em praticamente todas as tabelas
+de negócio do sistema.
+
+nome
+Nome comercial da empresa.
+Usado para exibição em UI, relatórios e auditoria humana.
+
+slug
+Identificador textual único e estável.
+Usado para URLs, roteamento e identificação sem expor IDs internos.
+
+status
+Estado operacional do tenant (active, suspended).
+Permite bloquear completamente uma empresa sem apagar dados.
+
+created_at
+Data de criação do tenant.
+Usado para auditoria e controle administrativo.
+
+updated_at
+Última atualização do cadastro do tenant.
+Usado para rastreabilidade de mudanças.
+
+
+------------------------------------------------------------
+auth.Users
+------------------------------------------------------------
+
+Representa a identidade global da pessoa que acessa o sistema.
+
+Não possui tenant_id porque um mesmo usuário pode participar de várias
+empresas diferentes.
+
+Atributos:
+
+user_id
+Identificador interno do usuário.
+Usado como FK em memberships, auditoria e ações do sistema.
+
+email
+Identificador único de login.
+Usado para autenticação e comunicação.
+
+password_hash
+Hash irreversível da senha.
+Existe para autenticação segura sem armazenar a senha real.
+Pode ser NULL para SSO ou convites.
+
+name
+Nome exibido do usuário.
+Usado em UI, auditoria e mensagens.
+
+status
+Estado global do usuário (active, disabled, locked).
+Controla se a identidade pode autenticar no sistema.
+
+created_at
+Data de criação da identidade.
+Usado para auditoria e métricas internas.
+
+updated_at
+Última atualização do cadastro do usuário.
+Usado para rastrear mudanças.
+
+last_login_at
+Último login bem-sucedido.
+Usado para segurança e monitoramento de uso.
+
+
+------------------------------------------------------------
+auth.TenantUsers
+------------------------------------------------------------
+
+Define o vínculo entre um usuário e um tenant.
+Representa o conceito de membership.
+
+Sem essa tabela, usuários existiriam no sistema, mas não pertenceriam
+a nenhuma empresa.
+
+Atributos:
+
+tenant_user_id
+Identificador do vínculo usuário–tenant.
+Permite tratar o membership como entidade própria (convite, remoção, auditoria).
+
+tenant_id
+Empresa à qual o usuário está vinculado.
+Define o escopo de atuação do usuário.
+
+user_id
+Identidade global do usuário.
+Conecta a pessoa ao tenant.
+
+status
+Estado do vínculo (invited, active, removed).
+Permite controlar acesso sem apagar histórico.
+
+joined_at
+Data em que o usuário efetivamente entrou no tenant.
+Diferencia convite de acesso ativo.
+
+created_at
+Data de criação do vínculo.
+Usado para auditoria e rastreabilidade.
+
+
+------------------------------------------------------------
+auth.Roles
+------------------------------------------------------------
+
+Define os papéis (funções) dentro de um tenant.
+Roles agrupam permissões e representam funções organizacionais.
+
+Atributos:
+
+role_id
+Identificador interno do papel.
+Usado para atribuição e relacionamento.
+
+tenant_id
+Empresa dona do papel.
+Permite que cada tenant tenha sua própria estrutura de roles.
+
+name
+Nome do papel (ex.: admin, operador).
+Usado em UI e regras de negócio.
+
+description
+Descrição do papel.
+Usada para documentação interna.
+
+is_system
+Indica se o papel é padrão do sistema.
+Evita exclusão ou edição indevida de roles essenciais.
+
+created_at
+Data de criação do papel.
+Usada para auditoria.
+
+
+------------------------------------------------------------
+auth.Permissions
+------------------------------------------------------------
+
+Catálogo global das ações possíveis no sistema.
+
+Permissões não pertencem a tenants, pois as ações possíveis do sistema
+são universais.
+
+Atributos:
+
+permission_id
+Identificador interno da permissão.
+Usado para relacionamentos.
+
+code
+Código lógico da permissão (ex.: campaign.create).
+Usado diretamente no código da aplicação.
+
+description
+Descrição humana da permissão.
+Usada para entendimento e UI administrativa.
+
+
+------------------------------------------------------------
+auth.RolePermissions
+------------------------------------------------------------
+
+Tabela de ligação entre roles e permissões.
+
+Define quais ações um papel pode executar.
+É uma relação N:N pura, sem identidade própria.
+
+Atributos:
+
+role_id
+Papel que recebe a permissão.
+Herda o escopo do tenant via role.
+
+permission_id
+Permissão concedida ao papel.
+Define a ação permitida.
+
+
+------------------------------------------------------------
+auth.UserRoles
+------------------------------------------------------------
+
+Define quais papéis um usuário possui dentro de um tenant.
+É onde o RBAC se concretiza na prática.
+
+Atributos:
+
+tenant_id
+Empresa onde o papel vale.
+Permite que o mesmo usuário tenha papéis diferentes em empresas diferentes.
+
+user_id
+Identidade global do usuário.
+Define quem recebe o papel.
+
+role_id
+Papel atribuído.
+Define o conjunto de permissões concedidas.
+
+created_at
+Data da atribuição do papel.
+Usada para auditoria e histórico de acesso.
+
+
+------------------------------------------------------------
+FUNCIONAMENTO INTEGRADO
+------------------------------------------------------------
+
+1. O usuário existe globalmente (auth.Users)
+2. Ele pertence a uma ou mais empresas (auth.TenantUsers)
+3. Cada empresa define papéis (auth.Roles)
+4. Papéis possuem permissões (auth.RolePermissions)
+5. Usuários recebem papéis por empresa (auth.UserRoles)
+6. As permissões efetivas são derivadas dos papéis no tenant ativo
+
+Todo acesso ocorre sempre dentro do contexto de um tenant.
+
+
+------------------------------------------------------------
+ALERTA ARQUITETURAL IMPORTANTE
+------------------------------------------------------------
+
+Atualmente, não existe uma garantia estrutural no banco que impeça
+a seguinte situação:
+
+Um usuário possuir registros em auth.UserRoles para um tenant
+sem possuir um vínculo ativo correspondente em auth.TenantUsers.
+
+Isso significa que é possível atribuir roles a um usuário em um tenant
+mesmo que esse usuário não esteja associado a esse tenant como membro.
+
+Essa integridade hoje depende exclusivamente da lógica da aplicação.
+
+Para blindagem total, o sistema deve garantir que:
+todo (tenant_id, user_id) presente em auth.UserRoles
+exista previamente em auth.TenantUsers com status válido.
+
+Essa verificação pode ser feita via:
+- lógica no backend
+- ou mecanismo estrutural (FK composto ou trigger)
