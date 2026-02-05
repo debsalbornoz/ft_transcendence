@@ -1,0 +1,357 @@
+======================================================================
+VISÃO GERAL DO SISTEMA
+======================================================================
+
+A aplicação é uma plataforma multi-tenant (multiempresa) para campanhas
+de e-mail e geração de leads, com as seguintes características:
+
+- área logada para empresas (tenants)
+- controle de acesso por perfil (RBAC)
+- upload de CSV com base de e-mails
+- campanhas de envio massivo (simulado)
+- tracking de eventos
+  (simulado: sent / open / click / bounce / unsubscribe)
+- landing pages e formulários (simulado)
+- captura de leads por campanha
+- dashboards por campanha com métricas agregadas e filtros de período
+- auditoria de ações no sistema
+
+
+======================================================================
+MENU DO SISTEMA (4 ABAS PRINCIPAIS)
+======================================================================
+
+--------------------------------------------------
+1) CADASTROS
+--------------------------------------------------
+
+Tudo que o usuário precisa configurar para o sistema funcionar:
+
+- dados da empresa (tenant)
+- usuários e funcionários (membros do tenant)
+- papéis e permissões (RBAC)
+- configuração de envio (provedores e identidades)
+- base de audiência (listas)
+- campanhas (estrutura do envio)
+- landing page e formulário (template e campos)
+
+
+--------------------------------------------------
+2) UPLOADS
+--------------------------------------------------
+
+Área para o cliente subir arquivos CSV com e-mails:
+
+- importação de contatos
+- validação e higienização de e-mails
+- associação a uma audiência (lista)
+- auditoria por linha importada
+- controle de status do job de importação
+
+
+--------------------------------------------------
+3) LEADS
+--------------------------------------------------
+
+Área de consulta dos leads capturados via formulário por campanha:
+
+- leads agrupados por campanha
+- valores preenchidos por campo do formulário
+- vínculo opcional com tracking (mid / rid) para atribuição
+
+
+--------------------------------------------------
+4) DASHBOARDS
+--------------------------------------------------
+
+Área de métricas e análise por campanha:
+
+- métricas brutas (eventos)
+- métricas agregadas diárias (performance)
+- comparação entre campanhas
+- exportação (futuro / extra)
+
+
+======================================================================
+MÓDULOS DO SISTEMA
+(funcionalidades reais + tabelas + relação com páginas)
+======================================================================
+
+--------------------------------------------------
+MÓDULO 1 — NÚCLEO MULTI-TENANT (core)
+--------------------------------------------------
+
+Objetivo real:
+Garantir que cada empresa tenha seu próprio “universo” de dados no
+mesmo sistema, sem qualquer mistura.
+
+Tabelas:
+- core.Tenants
+
+Como aparece no sistema:
+- Cadastros: "Dados da Empresa"
+- Contexto de sessão: todo o sistema roda com um tenant_id ativo
+
+Relação com outros módulos:
+- Todas as tabelas de negócio carregam tenant_id
+- Todos os dados são filtrados por tenant_id
+
+
+--------------------------------------------------
+MÓDULO 2 — AUTENTICAÇÃO, ASSOCIAÇÃO AO TENANT E RBAC (auth)
+--------------------------------------------------
+
+Objetivo real:
+Fazer login e controlar quem pode fazer o quê dentro de cada empresa.
+
+Tabelas:
+- auth.Users (identidade global)
+- auth.TenantUsers (membro do tenant)
+- auth.Roles (funções por tenant)
+- auth.Permissions (catálogo global de ações)
+- auth.RolePermissions (permissões por role)
+- auth.UserRoles (roles do usuário dentro do tenant)
+
+Como aparece no sistema:
+- Login e senha: auth.Users (password_hash)
+- Seleção de empresa: auth.TenantUsers
+
+Cadastros:
+- "Funcionários / Usuários": TenantUsers
+- "Papéis (Roles)" e "Permissões":
+  Roles, Permissions, RolePermissions, UserRoles
+
+Relação com outros módulos:
+- Todo acesso é tenant-aware
+- Permissões controlam acesso às abas:
+  Cadastros, Uploads, Leads e Dashboards
+
+
+--------------------------------------------------
+MÓDULO 3 — TRACKING E MÉTRICAS BRUTAS (mtrk)
+--------------------------------------------------
+
+Objetivo real:
+Ser o motor de campanhas e métricas. Mesmo com envio simulado, é aqui que:
+
+- campanhas existem
+- mensagens são geradas
+- eventos são registrados
+- métricas alimentam dashboards
+
+Tabelas:
+- mtrk.Contatos
+- mtrk.Campanhas
+- mtrk.Mensagens
+- mtrk.Links
+- mtrk.Eventos
+- mtrk.Unsubscribes
+
+Como aparece no sistema:
+Cadastros:
+- "Campanhas" (criar / editar)
+
+Uploads e envio:
+- criação de Mensagens por contato
+- registro de Eventos para métricas
+
+Dashboards:
+- leitura direta de Eventos
+- leitura de dados agregados (analytics)
+
+Leads:
+- leads podem referenciar mid / rid para atribuição
+
+Relação com outros módulos:
+- mkt.AudienceContacts → mtrk.Contatos
+- mkt.CampaignAudiences → mtrk.Campanhas
+- lead.LandingPages é 1:1 com Campanhas
+- analytics agrega métricas das campanhas
+
+
+--------------------------------------------------
+MÓDULO 4 — MARKETING, AUDIÊNCIAS E IMPORTAÇÃO (mkt)
+--------------------------------------------------
+
+Objetivo real:
+Gerenciar listas (audiências) e o processo de upload do CSV com
+rastreabilidade e validação.
+
+Tabelas:
+- mkt.Audiences
+- mkt.AudienceContacts
+- mkt.ImportJobs
+- mkt.ImportRows
+- mkt.EmailValidations
+- mkt.EmailValidationHistory
+- mkt.CampaignAudiences
+
+Como aparece no sistema:
+Uploads:
+- usuário envia CSV → ImportJob
+- cada linha vira ImportRows
+- e-mails válidos atualizam mtrk.Contatos
+- associação à audiência
+
+Cadastros:
+- "Listas / Audiências"
+- "Campanhas → Selecionar listas"
+
+Dashboards:
+- estatísticas de importação (opcional)
+
+Relação com outros módulos:
+- AudienceContacts → Contatos
+- CampaignAudiences → Campanhas
+- ImportJobs registra usuário (auth.Users)
+
+
+--------------------------------------------------
+MÓDULO 5 — OPERAÇÃO DE ENVIO E GOVERNANÇA DE BLOQUEIOS (ops)
+--------------------------------------------------
+
+Objetivo real:
+Configurar como o envio funcionaria e governar bloqueios e supressões.
+
+Tabelas:
+- ops.SendingProviders
+- ops.SendingIdentities
+- ops.SuppressionList
+
+Como aparece no sistema:
+Cadastros:
+- "Provedores de envio"
+- "Identidades de envio"
+- "Lista de supressão / bloqueios"
+
+Uploads e envio:
+- verificação de SuppressionList e Unsubscribes
+
+Dashboards:
+- bounce, complaint e unsubscribe como métricas
+
+Relação com outros módulos:
+- influencia Mensagens e Eventos
+- conecta com status de Contatos e Unsubscribes
+
+
+--------------------------------------------------
+MÓDULO 6 — LANDING PAGES, FORMULÁRIOS E LEADS (lead)
+--------------------------------------------------
+
+Objetivo real:
+Capturar leads por campanha.
+
+Tabelas:
+- lead.LandingPages
+- lead.FormTemplates
+- lead.FormFields
+- lead.LandingPageForms
+- lead.Leads
+- lead.LeadFieldValues
+
+Como aparece no sistema:
+Cadastros:
+- landing page por campanha
+- template e campos do formulário
+
+Leads:
+- lista de leads por campanha
+- detalhes dos campos preenchidos
+
+Uploads e tracking:
+- lead pode referenciar mid / rid
+
+Relação com outros módulos:
+- LandingPages → Campanhas
+- Leads → Campanhas e LandingPages
+- Dashboards usam lead_count agregado
+
+
+--------------------------------------------------
+MÓDULO 7 — AUDITORIA (audit)
+--------------------------------------------------
+
+Objetivo real:
+Garantir rastreabilidade de ações importantes.
+
+Tabelas:
+- audit.AuditLogs
+
+Como aparece no sistema:
+- logs administrativos (opcional)
+- segurança e troubleshooting
+- compliance
+
+Relação com outros módulos:
+- referencia tenant, user e entidades do sistema
+
+
+--------------------------------------------------
+MÓDULO 8 — ANALYTICS (analytics)
+--------------------------------------------------
+
+Objetivo real:
+Dashboards rápidos e performáticos.
+
+Tabelas:
+- analytics.DailyCampaignMetrics
+
+Como aparece no sistema:
+- gráficos por período
+- comparações entre campanhas
+- KPIs: sent, open, click, bounce, unsub, leads
+
+Relação com outros módulos:
+- agrega dados de Eventos e Leads
+- referencia Campanhas e Tenants
+
+
+======================================================================
+FLUXOS REAIS (END-TO-END)
+======================================================================
+
+Fluxo A — Login e contexto multi-tenant
+- Login (auth.Users)
+- Lista de empresas (auth.TenantUsers)
+- Seleção do tenant ativo
+- Resolução de permissões (RBAC)
+- Liberação de menus e páginas
+
+Fluxo B — Upload CSV e criação de audiência
+- Criação da audiência
+- Upload do CSV
+- Auditoria linha a linha
+- Normalização e criação de contatos
+- Associação à audiência
+
+Fluxo C — Criar campanha e “enviar” (simulado)
+- Criação da campanha
+- Associação de audiências
+- Geração de Mensagens
+- Registro de Eventos
+- Aplicação de bloqueios
+
+Fluxo D — Capturar lead (simulado)
+- Landing page e formulário
+- Submissão gera Lead
+- Campos salvos
+- Atribuição opcional via tracking
+
+Fluxo E — Dashboards
+- Leitura de métricas agregadas
+- Drill-down em eventos
+- Visualização de KPIs por período
+
+
+======================================================================
+OBSERVAÇÃO IMPORTANTE — INTEGRIDADE E SEGURANÇA
+======================================================================
+
+Conceitualmente:
+- um usuário só deveria ter roles em um tenant
+  se ele for membro desse tenant
+
+Estruturalmente:
+- isso depende de validação no backend
+  (ou futuramente FK composto / triggers)
