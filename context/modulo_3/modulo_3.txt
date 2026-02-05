@@ -1,0 +1,240 @@
+CONTEXTO — MÓDULO MARKETING, AUDIÊNCIAS E IMPORTAÇÃO (mkt)
+
+Visão Geral do Módulo
+
+O módulo mkt é responsável por toda a preparação da base de contatos antes do envio de campanhas.
+Ele não envia e-mails e não gera métricas diretamente. Seu papel é garantir que:
+
+- os contatos sejam organizados de forma estratégica
+- a origem dos dados seja rastreável
+- a qualidade dos e-mails seja avaliada
+- campanhas saibam exatamente para quem devem ser disparadas
+
+Esse módulo é o elo entre:
+- dados externos (CSV, upload)
+- contatos internos (mtrk.Contatos)
+- campanhas (mtrk.Campanhas)
+
+Sem este módulo, o sistema teria apenas e-mails soltos, sem contexto, sem segmentação e sem rastreabilidade.
+
+--------------------------------------------------------------------
+
+Conceito Central: Audience (Audiência)
+
+Audience representa um agrupamento intencional de contatos.
+Não é apenas uma lista técnica, mas um grupo com significado de negócio.
+
+Exemplos reais de audiences:
+- Leads do site
+- Clientes ativos
+- Base comprada
+- Evento Março 2026
+- Newsletter mensal
+
+Audience existe para:
+- permitir segmentação real de campanhas
+- reaproveitar bases em múltiplas campanhas
+- auditar de onde cada contato veio
+- analisar qualidade da base por origem
+
+Um contato pode estar em várias audiences.
+Uma audience pode ser usada por várias campanhas.
+
+Audience NÃO armazena contatos diretamente.
+Ela apenas define o conceito do grupo.
+
+--------------------------------------------------------------------
+
+Tabela: mkt.Audiences
+
+Objetivo:
+Representar listas/audiências criadas pelo cliente para segmentar contatos.
+
+Principais atributos e razão de existir:
+- audience_id: identificador único da lista
+- tenant_id: garante isolamento multi-tenant
+- name: nome da audiência (ex.: “Leads do Site”)
+- description: contexto humano da lista
+- status: ativa ou arquivada
+- created_at / updated_at: auditoria
+
+Relações:
+- ligada a contatos via mkt.AudienceContacts
+- ligada a campanhas via mkt.CampaignAudiences
+
+--------------------------------------------------------------------
+
+Tabela: mkt.AudienceContacts
+
+Objetivo:
+Materializar o pertencimento de um contato a uma audience.
+
+AudienceContacts NÃO guarda dados do contato nem da audience.
+Ela guarda apenas o relacionamento entre eles.
+
+Principais atributos:
+- audience_id: qual lista
+- rid: qual contato (mtrk.Contatos)
+- added_at: quando o contato entrou na lista
+
+Razão de existir:
+- permitir relacionamento N:N entre contatos e audiences
+- evitar duplicação de contatos
+- permitir reaproveitamento de bases
+- manter histórico e rastreabilidade
+
+Sem essa tabela, o sistema não conseguiria segmentar campanhas corretamente.
+
+--------------------------------------------------------------------
+
+Tabela: mkt.ImportJobs
+
+Objetivo:
+Representar um processo de importação (upload de CSV).
+É o “cabeçalho” do upload, não os dados em si.
+
+ImportJobs responde perguntas como:
+- quem fez o upload
+- quando
+- para qual audience
+- quantas linhas vieram
+- quantas foram válidas, duplicadas ou com erro
+- se o processo foi concluído ou falhou
+
+Principais atributos:
+- import_job_id: identificador do upload
+- tenant_id: isolamento multi-tenant
+- audience_id: lista destino
+- uploaded_by_user_id: usuário que iniciou o upload
+- file_name: nome original do arquivo
+- file_hash: hash do conteúdo para idempotência e deduplicação
+- status: queued, processing, done, failed, cancelled
+- contadores de linhas (total, ok, erro, duplicadas)
+- timestamps de criação, início e fim
+
+ImportJobs governa o processo de upload, mas não importa contatos diretamente.
+
+--------------------------------------------------------------------
+
+Tabela: mkt.ImportRows
+
+Objetivo:
+Registrar cada linha do CSV de forma auditável.
+
+Essa tabela permite explicar exatamente:
+- o que veio no arquivo
+- por que uma linha falhou
+- por que um e-mail não entrou no sistema
+
+Principais atributos:
+- import_row_id: identificador da linha
+- import_job_id: vínculo com o upload
+- row_number: número da linha no CSV
+- raw_email / raw_name: dados crus
+- normalized_email: e-mail após normalização
+- parse_status: ok ou error
+- error_code / error_detail: motivo do erro
+- created_at: auditoria
+
+ImportRows é o “log detalhado” do upload.
+
+--------------------------------------------------------------------
+
+Tabela: mkt.EmailValidations
+
+Objetivo:
+Guardar o estado atual de validação de um e-mail.
+Ela decide se um contato pode ou não ser usado em envios.
+
+Parsing (ImportRows) responde:
+“Esse texto é um e-mail válido como string?”
+
+EmailValidations responde:
+“Esse e-mail deve ser utilizado em envios?”
+
+Principais atributos:
+- rid: contato validado (PK)
+- tenant_id: isolamento e performance
+- status: valid, invalid, risky, unknown
+- reason_code: motivo da classificação
+- score: pontuação de risco/qualidade
+- validated_at: quando foi validado
+- validator_version: versão do algoritmo
+- details_json: detalhes técnicos
+
+Essa tabela governa decisões de envio e segmentação.
+
+--------------------------------------------------------------------
+
+Tabela: mkt.EmailValidationHistory
+
+Objetivo:
+Manter o histórico completo das validações ao longo do tempo.
+
+Enquanto EmailValidations guarda o estado atual,
+EmailValidationHistory guarda a linha do tempo.
+
+Principais atributos:
+- validation_id: identificador do histórico
+- tenant_id: isolamento
+- rid: contato validado
+- status, score, reason_code
+- validated_at: momento da validação
+- validator_version: versão do algoritmo
+- details_json: detalhes técnicos
+
+Essa tabela é fundamental para auditoria, suporte e evolução do algoritmo.
+
+--------------------------------------------------------------------
+
+Tabela: mkt.CampaignAudiences
+
+Objetivo:
+Definir o público-alvo de uma campanha.
+
+Ela conecta:
+- campanhas (mtrk.Campanhas)
+- audiences (mkt.Audiences)
+
+Principais atributos:
+- tenant_id: isolamento
+- cid: campanha
+- audience_id: lista
+- created_at: auditoria
+
+Chave primária composta:
+(cid, audience_id)
+
+Sem essa tabela, campanhas não saberiam para quem enviar.
+
+--------------------------------------------------------------------
+
+Fluxo Real de Funcionamento do Módulo
+
+1) Usuário cria uma audience
+2) Usuário sobe um CSV
+3) Cria-se um ImportJob
+4) Cada linha vira um ImportRow
+5) E-mails válidos criam/atualizam Contatos
+6) Contatos entram na Audience via AudienceContacts
+7) Validações classificam os e-mails
+8) Campanhas selecionam audiences como público-alvo
+9) O envio (simulado) filtra quem realmente pode receber
+
+--------------------------------------------------------------------
+
+Relação com Outros Módulos
+
+- core: todas as tabelas carregam tenant_id
+- auth: uploads registram quem executou a ação
+- mtrk: contatos, campanhas e mensagens dependem desse módulo
+- ops: validação, suppression e unsubscribe afetam quem pode receber
+- analytics: qualidade da base impacta métricas
+- audit: ações de upload e validação podem ser auditadas
+
+--------------------------------------------------------------------
+
+Resumo Conceitual
+
+O módulo mkt transforma e-mails brutos em uma base organizada, rastreável e estrategicamente utilizável.
+Sem ele, o sistema não teria segmentação, nem controle de qualidade, nem confiança nos dados.
