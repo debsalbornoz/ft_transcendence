@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # Serviço de banco de dados SQL Server
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: "Y"
+      SA_PASSWORD: "YourStrong!Passw0rd"
+      MSSQL_PID: "Express"
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    networks:
+      - app-network
+
+  # Serviço para inicializar o banco de dados com os scripts SQL
+  db-init:
+    image: mcr.microsoft.com/mssql-tools:latest
+    depends_on:
+      - db
+    volumes:
+      - ./init-sql:/init-sql:ro
+    # Executa um script de inicialização localizado em init-sql/init_db.sh
+    entrypoint: ["/bin/bash", "/init-sql/init_db.sh"]
+    networks:
+      - app-network
+
+  # Backend Node.js (pode ser adaptado para NestJS/Express)
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: mssql://sa:YourStrong!Passw0rd@db:1433/transcendence
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  # Frontend Next.js
+  frontend:
+    build: ./frontend
+    environment:
+      # O frontend deverá consumir a API via NGINX na porta 8080 (mapeada do host)
+      NEXT_PUBLIC_API_URL: http://localhost:8080/api
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  # Servidor NGINX para proxy reverso
+  nginx:
+    image: nginx:alpine
+    depends_on:
+      - frontend
+      - backend
+    # Em ambientes rootless da 42 não é permitido mapear a porta 80 (<1024) para o host.
+    # Por isso, mapeamos a porta 8080 no host para a porta interna 80 do NGINX.
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  mssql-data:
