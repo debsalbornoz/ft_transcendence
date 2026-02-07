@@ -1,0 +1,174 @@
+CONTEXT EXTRA — Módulo mtrk
+Simulação de Envio e Geração de Métricas (sem envio real de e-mails)
+
+Objetivo deste Context
+
+Este documento descreve como o sistema deve SIMULAR o comportamento de um sistema real de e-mail marketing,
+gerando métricas completas de envio sem realizar disparos reais de e-mail.
+
+A simulação deve permitir:
+- testar toda a arquitetura de campanhas
+- alimentar dashboards com métricas reais
+- validar tracking, leads e analytics
+- demonstrar funcionamento completo do sistema para avaliação e estudo
+
+Nenhum e-mail é enviado para a internet.
+
+Princípio Geral da Simulação
+
+O sistema deve se comportar COMO SE o envio tivesse ocorrido.
+
+Ou seja:
+- mensagens são criadas
+- eventos são gerados
+- métricas são agregadas
+- leads são atribuídos
+- dashboards funcionam normalmente
+
+A única coisa que não acontece é o envio SMTP real.
+
+O banco de dados deve refletir exatamente o que refletiria em produção.
+
+O que é Simulado no Módulo mtrk
+
+1) Simulação de Envio de Mensagens
+
+Ao “enviar” uma campanha:
+
+- o sistema seleciona os contatos elegíveis (audiência)
+- aplica regras de bloqueio (Unsubscribes e SuppressionList)
+- para cada contato válido:
+  - cria um registro em mtrk.Mensagens
+  - define status inicial (queued ou sent)
+  - registra created_at e sent_at simulados
+
+Isso representa o envio individual por contato.
+
+2) Simulação de Eventos de Envio
+
+Após criar as mensagens, o sistema gera eventos simulados em mtrk.Eventos.
+
+Eventos possíveis:
+- sent
+- delivered
+- open
+- click
+- bounce
+- complaint
+- unsubscribe
+
+Regras básicas de simulação (exemplo):
+
+- 100% das mensagens geram evento sent
+- X% geram delivered
+- Y% geram open
+- Z% geram click
+- pequena porcentagem gera bounce
+- pequena porcentagem gera unsubscribe
+
+Esses percentuais podem ser:
+- fixos
+- aleatórios
+- configuráveis por campanha
+
+Cada evento deve:
+- referenciar mid
+- referenciar rid
+- ter created_at coerente com a timeline do envio
+
+3) Simulação de Links e Cliques (CTA)
+
+Para cada mensagem:
+- os links do e-mail são cadastrados em mtrk.Links
+- cada link recebe um lid
+
+Ao simular cliques:
+- o sistema gera eventos do tipo click
+- associa mid e lid
+- permite ranking de CTAs nos dashboards
+
+O HTML do e-mail é único.
+O que diferencia os cliques é o identificador do link.
+
+4) Simulação de Unsubscribe
+
+Quando um evento unsubscribe é gerado:
+
+- registra evento unsubscribe em mtrk.Eventos
+- cria registro em mtrk.Unsubscribes
+- aplica regra de bloqueio para envios futuros
+
+Isso simula o comportamento real de descadastro.
+
+5) Simulação de Timeline Realista
+
+Os timestamps devem respeitar uma ordem lógica:
+
+- sent
+- delivered
+- open
+- click
+- unsubscribe (quando existir)
+
+Os horários podem ser:
+- espaçados por minutos ou horas
+- distribuídos ao longo do dia
+- coerentes para gráficos por período
+
+Isso é importante para:
+- dashboards
+- filtros de data
+- análises de funil
+
+6) Alimentação de Analytics
+
+Após gerar eventos simulados:
+
+- o sistema consolida métricas diárias
+- popula analytics.DailyCampaignMetrics
+- agrega por:
+  - tenant
+  - campanha
+  - data
+
+Esses dados são usados diretamente pelos dashboards,
+evitando leitura pesada de mtrk.Eventos.
+
+7) Integração com Leads (Simulado)
+
+Opcionalmente, a simulação pode gerar leads:
+
+- uma parte dos eventos de click gera submissão de formulário
+- cria registros em lead.Leads
+- popula lead.LeadFieldValues
+- associa lead a mid e rid
+
+Isso permite:
+- medir conversão
+- atribuir leads à campanha correta
+- testar dashboards de performance completa
+
+O que NÃO é Simulado
+
+- envio SMTP real
+- webhooks externos
+- validação real de e-mail
+- abertura real por pixel
+
+Tudo ocorre internamente no banco de dados.
+
+Benefícios da Simulação
+
+- desenvolvimento sem risco
+- testes previsíveis
+- métricas ricas para estudo
+- arquitetura validada
+- demonstração completa do sistema
+
+Conclusão
+
+A simulação no módulo mtrk deve reproduzir fielmente o comportamento de um sistema real de e-mail marketing,
+substituindo apenas o envio externo por geração controlada de dados internos.
+
+Para o restante do sistema (UI, dashboards, leads e auditoria),
+não existe diferença entre dados simulados e dados reais.

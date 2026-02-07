@@ -1,0 +1,218 @@
+CONTEXT — Módulo mtrk (Tracking, Campanhas e Métricas)
+
+Visão Geral do Módulo
+
+O módulo mtrk é o coração operacional do sistema.
+Ele representa tudo que envolve campanhas, envios, interações e métricas.
+
+Mesmo com envios e formulários simulados, este módulo modela um sistema real de e-mail marketing, permitindo:
+
+- criação de campanhas
+- geração de envios individuais
+- rastreamento de eventos (sent, open, click, bounce, unsubscribe)
+- atribuição de leads
+- base confiável para dashboards e analytics
+
+O módulo é totalmente multi-tenant, e todas as entidades carregam tenant_id.
+
+Objetivo Real do Módulo
+
+Resolver o problema central:
+
+“Como modelar campanhas, envios e métricas de forma rastreável, auditável e escalável?”
+
+O módulo mtrk separa claramente:
+- intenção (o que foi planejado)
+- execução (o que foi enviado)
+- resultado (o que aconteceu)
+
+Tabelas do Módulo
+
+1) mtrk.Contatos
+
+Conceito
+Catálogo canônico de destinatários por tenant.
+
+Cada contato representa um endereço de e-mail único dentro de uma empresa, independentemente de quantas campanhas ele participe.
+
+Por que existe
+- evita duplicação de e-mails
+- centraliza status (ativo, suprimido, bounce)
+- permite histórico por contato
+
+Relações
+- usado por Mensagens, Eventos e Unsubscribes
+- associado a audiências via mkt.AudienceContacts
+- pode ser ligado a leads (lead.Leads)
+
+2) mtrk.Campanhas
+
+Conceito
+Representa uma campanha de envio massivo.
+
+Uma campanha define:
+- objetivo
+- conteúdo
+- período
+- remetente
+- status de execução
+
+Por que existe
+- é a unidade principal de análise
+- organiza métricas e leads
+- permite comparação entre campanhas
+
+Relações
+- ligada a contatos via Mensagens
+- associada a audiências via mkt.CampaignAudiences
+- possui landing page 1:1 (lead.LandingPages)
+- alimenta analytics e dashboards
+
+3) mtrk.Mensagens
+
+Conceito
+Uma mensagem representa um envio individual:
+um contato específico recebendo uma campanha específica.
+
+Por que existe
+- transforma envio massivo em envios rastreáveis
+- permite tracking por pessoa
+- é o elo entre campanha, contato e eventos
+
+Importância
+Essa é a tabela que torna possível o tracking real.
+
+Sem Mensagens, não existe:
+- clique atribuído
+- lead atribuído
+- funil por contato
+
+Relações
+- pertence a uma campanha
+- pertence a um contato
+- gera eventos
+- pode gerar leads
+
+4) mtrk.Links
+
+Conceito
+Catálogo de links (CTAs) rastreáveis dentro de uma mensagem.
+
+Cada link representa uma ação possível dentro do e-mail.
+
+Por que existe
+- permite saber qual botão foi clicado
+- possibilita ranking de CTAs
+- viabiliza análise de conversão
+
+Modelo adotado
+- o HTML do e-mail é o mesmo para todos
+- o que muda é o link com identificadores (mid, lid)
+
+Relações
+- pertence a uma mensagem
+- é usado apenas em eventos de clique
+
+5) mtrk.Eventos
+
+Conceito
+Log bruto e imutável de tudo que aconteceu com uma mensagem.
+
+Cada linha responde:
+“algo aconteceu com essa mensagem, para esse contato, nesse momento”
+
+Exemplos de eventos
+- sent
+- delivered
+- open
+- click
+- bounce
+- complaint
+- unsubscribe
+
+Por que existe
+- é a fonte primária de métricas
+- permite drill-down
+- viabiliza analytics confiável
+
+Observação importante
+Eventos são histórico, não estado.
+
+6) mtrk.Unsubscribes
+
+Conceito
+Registra a decisão explícita do contato de não receber mais comunicações.
+
+Diferente de Eventos, aqui existe uma regra persistente de negócio.
+
+Escopos suportados
+- global (não receber mais nada do tenant)
+- campaign (não receber mais daquela campanha)
+- list (se aplicável)
+
+Por que existe
+- garantir compliance (LGPD)
+- impedir reenvios indevidos
+- separar evento de estado
+
+Relações
+- influencia diretamente a criação de novas mensagens
+- conversa com ops.SuppressionList
+- gera métricas de unsubscribe
+
+Relação do Módulo com o Sistema
+
+Com Marketing (mkt)
+- audiências definem quem será impactado
+- campanhas escolhem audiências
+- contatos vêm da importação
+
+Com Leads (lead)
+- leads podem ser atribuídos via mid e rid
+- conversão é associada à campanha correta
+
+Com Analytics (analytics)
+- eventos alimentam métricas agregadas
+- dashboards não leem eventos brutos diretamente
+
+Com Operação (ops)
+- suppression e unsubscribe bloqueiam envios
+- regras de governança são aplicadas antes da geração de mensagens
+
+Como o Módulo Aparece na UI
+
+Cadastros
+- campanhas
+- status da campanha
+- conteúdo e remetente
+
+Uploads e Envio (simulado)
+- geração de mensagens por audiência
+- simulação de eventos
+
+Leads
+- atribuição de leads à campanha
+- vínculo opcional com tracking
+
+Dashboards
+- métricas por campanha
+- drill-down por evento
+- análise de CTAs
+
+Fluxo Real Simplificado
+
+1) Criar campanha
+2) Associar audiências
+3) Gerar mensagens (simulado)
+4) Registrar eventos
+5) Bloquear contatos via unsubscribe ou suppression
+6) Agregar métricas
+7) Exibir dashboards
+
+Princípio Fundamental do Módulo
+
+Campanhas definem a intenção.
+Mensagens individualizam o envio.
+Eventos dizem o que aconteceu.
+Unsubscribes impõem limites.
+Analytics transformam tudo em decisão.
