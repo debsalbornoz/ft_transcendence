@@ -1,0 +1,181 @@
+CONTEXT — Módulo lead (Landing Pages, Formulários e Leads)
+
+Visão Geral do Módulo
+
+O módulo lead é responsável por capturar e organizar leads (submissões de formulário) por campanha.
+Ele conecta o mundo de campanhas e tracking (mtrk) com o mundo de conversão (lead), permitindo:
+
+- landing page por campanha
+- formulário dinâmico baseado em template
+- campos configuráveis por template
+- registro de submissões (leads)
+- armazenamento de valores por campo
+- atribuição opcional do lead ao tracking (mid/rid)
+- suporte a dashboards de conversão (lead_count)
+
+O módulo é totalmente multi-tenant e trabalha com tenant_id, garantindo isolamento de dados entre empresas.
+
+Objetivo Real do Módulo
+
+Resolver o problema central:
+
+“Como capturar leads de campanhas e armazenar dados de formulários sem criar colunas novas no banco a cada campo?”
+
+O módulo lead separa claramente:
+- página de conversão (landing)
+- estrutura do formulário (template + campos)
+- submissão (lead)
+- valores preenchidos (field values)
+
+Tabelas do Módulo
+
+1) lead.LandingPages
+
+Conceito
+Representa a landing page (página de destino) vinculada a uma campanha.
+É onde o usuário chega após clicar no e-mail e onde o formulário é exibido.
+
+Por que existe
+- landing page é um ativo de conversão ligado à campanha
+- precisa de estado (active/inactive), slug e vínculo com campanha
+- permite atribuição correta e preservação de histórico
+
+Relações
+- referencia mtrk.Campanhas (cid) com vínculo 1:1 (uma landing por campanha)
+- é ligada ao formulário via lead.LandingPageForms
+- é referenciada por lead.Leads (de onde veio o lead)
+
+2) lead.FormTemplates
+
+Conceito
+Modelo (template) de formulário.
+Define uma estrutura versionada de formulário que pode ser aplicada em uma landing page.
+
+Por que existe
+- permite versionar o formulário sem quebrar histórico
+- permite reutilizar o mesmo formulário em várias campanhas
+- separa “estrutura” de “submissão”
+
+Relações
+- possui muitos campos em lead.FormFields
+- é associado a uma landing via lead.LandingPageForms
+
+3) lead.FormFields
+
+Conceito
+Define os campos individuais de um template (field_key, label, tipo, obrigatoriedade, posição, validação).
+
+Por que existe
+- permite formulários dinâmicos sem alterar schema do banco
+- centraliza regras de UI e validação
+- define ordenação e tipo dos dados
+
+Relações
+- pertence a lead.FormTemplates
+- recebe valores via lead.LeadFieldValues
+
+4) lead.LandingPageForms
+
+Conceito
+Associação entre landing page e form template.
+Define qual formulário aparece em qual landing page.
+
+Por que existe
+- desacopla landing da estrutura do formulário
+- permite trocar o template usado por uma landing sem recriar landing
+- facilita evoluções futuras (histórico de templates, versionamento por landing)
+
+Relações
+- referencia lead.LandingPages
+- referencia lead.FormTemplates
+
+5) lead.Leads
+
+Conceito
+Representa uma submissão de formulário (um lead).
+É o “registro pai” do lead, com contexto e metadados.
+
+Por que existe
+- organiza leads por campanha e landing
+- permite listagem e consulta na UI (aba Leads)
+- permite dashboards de conversão
+- suporta atribuição ao tracking (mid/rid) quando aplicável
+
+Campos de atribuição (opcionais)
+- mid (mtrk.Mensagens): atribui lead ao envio específico (mensagem)
+- rid (mtrk.Contatos): atribui lead ao destinatário (contato)
+
+Metadados típicos
+- submitted_at, consent_at, ip_hash, user_agent
+
+Relações
+- referencia core.Tenants
+- referencia mtrk.Campanhas (cid)
+- referencia lead.LandingPages
+- pode referenciar mtrk.Mensagens (mid) e mtrk.Contatos (rid)
+- tem muitos valores em lead.LeadFieldValues
+
+6) lead.LeadFieldValues
+
+Conceito
+Armazena os valores preenchidos em cada campo do formulário para um lead.
+Modelo EAV tipado (value_text / value_number / value_date / value_bool).
+
+Por que existe
+- permite adicionar novos campos sem alterar o banco
+- suporta múltiplos tipos de dado com consistência
+- permite filtros e relatórios por campo
+
+Relações
+- referencia lead.Leads (lead_id)
+- referencia lead.FormFields (field_id)
+
+Como o Módulo Aparece na UI
+
+Aba Cadastros
+- Campanhas: configurar landing page (slug, status)
+- Landing Pages: ativar/desativar página por campanha
+- Form Templates: criar templates versionados
+- Form Fields: criar e ordenar campos por template
+- Associar landing a template: LandingPageForms
+
+Aba Leads
+- Leads agrupados por campanha
+- Lista de leads por período
+- Detalhe do lead exibindo todos os campos preenchidos (LeadFieldValues + FormFields)
+
+Relação do Módulo com Outros Módulos
+
+Com mtrk (Tracking)
+- LandingPages referencia Campanhas (cid)
+- Leads pode referenciar Mensagens (mid) e Contatos (rid) para atribuição
+- Isso permite medir conversão por envio, não apenas por campanha
+
+Com analytics (Dashboards)
+- lead_count pode ser calculado a partir de lead.Leads (por campanha e dia)
+- analytics.DailyCampaignMetrics pode armazenar agregados de leads por data e campanha
+
+Com auth/core (Multi-tenant e acesso)
+- todas as consultas são filtradas por tenant_id ativo na sessão
+- permissões (RBAC) controlam acesso às telas de cadastros e leads
+
+Fluxo Real Simplificado
+
+1) Campanha existe (mtrk.Campanhas)
+2) Landing é criada para a campanha (lead.LandingPages)
+3) Template de formulário é criado/versionado (lead.FormTemplates)
+4) Campos do template são definidos (lead.FormFields)
+5) Landing é associada ao template (lead.LandingPageForms)
+6) Usuário final acessa landing e envia formulário
+7) Sistema cria lead (lead.Leads) e valores (lead.LeadFieldValues)
+8) Se houver atribuição, lead registra mid/rid (mtrk.Mensagens / mtrk.Contatos)
+9) Dashboards usam leads para conversão (analytics)
+
+Princípio Fundamental do Módulo
+
+Landing page converte.
+Template define a estrutura.
+Campos definem a experiência.
+Lead registra a submissão.
+FieldValues guardam o conteúdo.
+mid/rid tornam a conversão atribuível.
