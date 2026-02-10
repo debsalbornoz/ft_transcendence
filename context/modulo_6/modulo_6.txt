@@ -1,0 +1,239 @@
+CONTEXT — Módulo ops (Operação de Envio e Governança de Bloqueios)
+
+Visão Geral do Módulo
+
+O módulo ops é responsável por modelar e governar a operação de envio de e-mails.
+Mesmo em um cenário de envio simulado, ele representa fielmente os componentes reais
+necessários para controlar como os envios ocorreriam e, principalmente, quem não deve
+receber mensagens.
+
+Este módulo separa claramente:
+- campanhas (o que será enviado)
+- mecanismo de envio (por onde seria enviado)
+- identidade de envio (quem envia)
+- regras de bloqueio e supressão (quem não pode receber)
+
+Ele é fundamental para garantir governança, reputação, compliance e coerência das métricas.
+
+Objetivo Real do Módulo
+
+Resolver os seguintes problemas reais:
+
+- permitir múltiplos provedores de envio por empresa
+- permitir múltiplos remetentes (from/reply-to) por empresa
+- desligar provedores ou remetentes sem apagar histórico
+- bloquear envios para e-mails problemáticos ou proibidos
+- centralizar regras de supressão independentes de campanhas
+
+Todas as decisões do módulo ops impactam diretamente a criação de mensagens,
+eventos de tracking e métricas finais.
+
+Tabelas do Módulo
+
+1) ops.SendingProviders
+
+Conceito
+
+Representa um provedor de envio configurado por tenant.
+Exemplos: Amazon SES, SendGrid, SMTP próprio, etc.
+
+Mesmo que o envio seja simulado, esta tabela modela:
+- qual seria o provedor
+- qual tipo de integração seria usada
+- se o provedor está ativo ou não
+
+Por que existe
+
+- um tenant pode ter mais de um provedor
+- permite alternar provedores sem alterar campanhas
+- separa configuração técnica da lógica de campanhas
+- facilita fallback e evolução futura
+
+Principais atributos
+
+- provider_id  
+  Identificador interno do provedor.
+
+- tenant_id  
+  Isolamento multi-tenant. Cada empresa configura seus próprios provedores.
+
+- type  
+  Tipo do provedor (SES, SENDGRID, SMTP, etc.).
+  Usado pelo backend para interpretar a configuração.
+
+- name  
+  Nome amigável do provedor para exibição na UI.
+
+- status  
+  Estado do provedor (active / disabled).
+  Permite desligar sem apagar.
+
+- config_json  
+  Configuração técnica do provedor (API keys, host, região, etc.).
+  Em produção, deve ser protegido/criptografado.
+
+- created_at  
+  Auditoria e rastreabilidade.
+
+Relações
+
+- Referenciado por ops.SendingIdentities
+- Filtrado sempre por tenant_id
+
+2) ops.SendingIdentities
+
+Conceito
+
+Representa a identidade de envio (remetente).
+Define quem envia o e-mail, independentemente do provedor.
+
+Exemplos:
+- Marketing <marketing@empresa.com>
+- Financeiro <financeiro@empresa.com>
+
+Por que existe
+
+- uma empresa pode ter múltiplos remetentes
+- separa identidade (from/reply-to) do mecanismo técnico
+- facilita governança de reputação e autenticação (SPF/DKIM)
+- permite reutilizar o mesmo provedor com diferentes identidades
+
+Principais atributos
+
+- identity_id  
+  Identificador interno da identidade.
+
+- tenant_id  
+  Isolamento multi-tenant.
+
+- provider_id  
+  Provedor associado a essa identidade.
+
+- from_name  
+  Nome exibido no remetente.
+
+- from_email  
+  E-mail do remetente.
+
+- reply_to_email  
+  E-mail para respostas.
+
+- dkim_status  
+  Status informativo da autenticação DKIM.
+
+- spf_status  
+  Status informativo da autenticação SPF.
+
+- status  
+  Estado da identidade (active / disabled).
+
+- created_at  
+  Auditoria.
+
+Relações
+
+- Depende de ops.SendingProviders
+- Usada conceitualmente por mtrk.Campanhas (remetente)
+
+3) ops.SuppressionList
+
+Conceito
+
+Lista de supressão por tenant.
+Define e-mails que não devem receber envios por motivos técnicos,
+legais ou administrativos.
+
+Essa tabela representa bloqueios que não dependem diretamente
+de campanhas ou eventos específicos.
+
+Por que existe
+
+Nem todo bloqueio vem de um unsubscribe explícito.
+Existem bloqueios por:
+- bounce técnico (hard bounce)
+- complaint (reclamação de spam)
+- bloqueio manual
+- integração com provedores externos
+
+Principais atributos
+
+- suppression_id  
+  Identificador interno do bloqueio.
+
+- tenant_id  
+  Isolamento multi-tenant.
+
+- email  
+  E-mail bloqueado (independente de contato existir).
+
+- type  
+  Motivo do bloqueio:
+  - unsubscribe
+  - bounce
+  - complaint
+  - manual_block
+
+- source  
+  Origem do bloqueio:
+  - system
+  - admin
+  - import
+  - provider
+
+- reason  
+  Descrição humana do motivo.
+
+- created_at  
+  Auditoria e rastreabilidade.
+
+Relações
+
+- Usada no processo de criação de mtrk.Mensagens
+- Conversa conceitualmente com:
+  - mtrk.Unsubscribes
+  - mtrk.Contatos.status
+
+Como o Módulo Aparece na UI
+
+Aba Cadastros
+
+- Provedores de envio
+  - criar, editar, ativar, desativar
+  - configurar dados técnicos
+
+- Identidades de envio
+  - definir from/reply-to
+  - associar a provedor
+  - controlar status
+
+- Lista de supressão
+  - consultar e-mails bloqueados
+  - inserir bloqueio manual
+  - visualizar motivo e origem
+  - remover bloqueio (com permissão)
+
+Relação com Outros Módulos
+
+- core.Tenants  
+  Todas as tabelas do módulo ops são multi-tenant.
+
+- mtrk.Campanhas  
+  Campanhas utilizam remetentes definidos em ops.
+
+- mtrk.Mensagens  
+  Antes de criar mensagens, o sistema verifica SuppressionList.
+
+- mtrk.Unsubscribes  
+  Unsubscribe é decisão do usuário.
+  Suppression é regra técnica/administrativa.
+
+- analytics.DailyCampaignMetrics  
+  Eventos de bounce, complaint e unsubscribe impactam métricas finais.
+
+Princípio Fundamental do Módulo
+
+SendingProviders define por onde o envio ocorreria.
+SendingIdentities define quem envia.
+SuppressionList define quem não pode receber.
+
+Nenhuma campanha deve gerar mensagens sem passar pelas regras do módulo ops.
