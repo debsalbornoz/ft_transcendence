@@ -1,0 +1,127 @@
+MÓDULO ANALYTICS — CONTEXT TÉCNICO
+
+Visão Geral
+
+O módulo analytics é responsável por fornecer métricas rápidas e
+escaláveis para os dashboards do sistema.
+
+Seu objetivo é evitar consultas pesadas na tabela mtrk.Eventos, que pode
+crescer para milhões de registros ao longo do tempo.
+
+Em vez disso, o sistema utiliza uma tabela agregada por dia e por
+campanha.
+
+Granularidade da tabela: tenant_id + campanha (cid) + data
+
+------------------------------------------------------------------------
+
+TABELA: analytics.DailyCampaignMetrics
+
+Objetivo
+
+Armazenar métricas agregadas diariamente por campanha, permitindo
+consultas rápidas e eficientes para dashboards.
+
+------------------------------------------------------------------------
+
+ESTRUTURA CONCEITUAL
+
+Chave primária composta: (tenant_id, cid, date)
+
+Isso garante: - Uma única linha por campanha por dia por tenant - Evita
+duplicidade de agregação - Facilita filtros por período
+
+------------------------------------------------------------------------
+
+ATRIBUTOS E RAZÃO DE EXISTIR
+
+tenant_id (FK → core.Tenants) Isolamento multi-tenant. Permite separar
+métricas por empresa.
+
+cid (FK → mtrk.Campanhas) Identifica qual campanha está sendo medida.
+
+date (DATE) Dia da agregação. Exemplo: 2026-02-15
+
+sent_count Quantidade de mensagens marcadas como sent.
+
+delivered_count Quantidade de mensagens entregues.
+
+open_count Quantidade de aberturas registradas.
+
+click_count Quantidade de cliques registrados.
+
+bounce_count Quantidade de bounces.
+
+complaint_count Quantidade de complaints.
+
+unsubscribe_count Quantidade de descadastros.
+
+lead_count Quantidade de leads capturados no dia para essa campanha.
+
+updated_at Controle técnico para saber quando a linha foi atualizada.
+
+------------------------------------------------------------------------
+
+RELAÇÕES COM OUTROS MÓDULOS
+
+core - tenant_id referencia core.Tenants
+
+mtrk - cid referencia mtrk.Campanhas - Eventos é a principal fonte de
+dados
+
+lead - lead_count vem de lead.Leads
+
+------------------------------------------------------------------------
+
+FONTES DE DADOS
+
+A tabela é alimentada principalmente por:
+
+mtrk.Eventos: - sent - delivered - open - click - bounce - complaint -
+unsubscribe
+
+lead.Leads: - lead_count
+
+------------------------------------------------------------------------
+
+ESTRATÉGIAS DE ATUALIZAÇÃO
+
+1)  Atualização incremental (tempo real) A cada novo evento, incrementa
+    o contador correspondente.
+
+2)  Batch noturno Processo que recalcula métricas diariamente.
+
+3)  Estratégia híbrida (recomendada) Incremental + validação periódica
+    para consistência.
+
+------------------------------------------------------------------------
+
+FUNÇÃO NO SISTEMA
+
+Menu → Dashboards
+
+Permite: - Gráficos de linha por período - KPIs principais - Comparação
+entre campanhas - Filtros por data
+
+------------------------------------------------------------------------
+
+PRINCÍPIO ARQUITETURAL
+
+mtrk.Eventos = log bruto detalhado (granularidade alta)
+analytics.DailyCampaignMetrics = dados agregados otimizados
+(granularidade diária)
+
+Sem analytics: - Dashboards lentos - Consultas pesadas - Problemas de
+escalabilidade
+
+Com analytics: - Consultas rápidas - Performance previsível -
+Escalabilidade controlada
+
+------------------------------------------------------------------------
+
+FLUXO COMPLETO ATÉ ANALYTICS
+
+Upload CSV → Contatos → Audiência → Campanha → Mensagens → Eventos →
+Leads → Agregação → Dashboard
+
+Analytics é o ponto final da cadeia de processamento.
