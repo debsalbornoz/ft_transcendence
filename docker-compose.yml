@@ -46,10 +46,16 @@ services:
     environment:
       # O frontend deverá consumir a API via NGINX na porta 8080 (mapeada do host)
       NEXT_PUBLIC_API_URL: http://localhost:8080/api
+      DB_HOST: db
+      DB_PORT: 1433
+      DB_USER: sa
+      DB_PASSWORD: YourStrong!Passw0rd
+      DB_NAME: transcendence
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      - db
+      - db-init
     networks:
       - app-network
 
