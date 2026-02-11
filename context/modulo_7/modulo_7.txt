@@ -1,0 +1,109 @@
+MÓDULO AUDIT — CONTEXT TÉCNICO
+
+Visão Geral
+
+O módulo audit é responsável por registrar ações relevantes realizadas
+dentro do sistema. Ele garante rastreabilidade, segurança,
+troubleshooting e compliance.
+
+Ele registra eventos administrativos e operacionais internos do sistema.
+
+Exemplos: - CREATE_CAMPAIGN - UPDATE_ROLE - DELETE_USER - IMPORT_CSV -
+EXPORT_LEADS - UPDATE_PROVIDER - LOGIN_SUCCESS - LOGIN_FAILURE
+
+Importante: AuditLogs NÃO registra eventos de marketing (isso é
+responsabilidade do módulo mtrk). AuditLogs registra eventos
+administrativos e ações internas do sistema.
+
+------------------------------------------------------------------------
+
+TABELA: audit.AuditLogs
+
+Objetivo
+
+Registrar todas as ações importantes realizadas dentro da aplicação,
+garantindo rastreabilidade completa.
+
+------------------------------------------------------------------------
+
+ATRIBUTOS E RAZÃO DE EXISTIR
+
+audit_id (PK) Identificador único do log.
+
+tenant_id (FK → core.Tenants) Indica a qual empresa o evento pertence.
+Permite isolamento por tenant.
+
+user_id (FK → auth.Users) Identifica quem executou a ação. Pode ser NULL
+em ações automáticas.
+
+action (VARCHAR) Tipo da ação realizada. Exemplos: CREATE_CAMPAIGN,
+UPDATE_ROLE, IMPORT_CSV.
+
+entity_type (VARCHAR) Qual entidade foi afetada. Exemplos: campaign,
+user, role, provider, audience, lead.
+
+entity_id (BIGINT) ID da entidade afetada.
+
+meta_json (NVARCHAR(MAX)) Detalhes adicionais da ação. Pode conter
+valores antes/depois, payloads, dados alterados.
+
+ip_address (VARCHAR) IP do usuário que realizou a ação.
+
+user_agent (NVARCHAR) Informação do navegador.
+
+created_at (DATETIME2) Momento em que a ação ocorreu.
+
+------------------------------------------------------------------------
+
+RELAÇÕES COM OUTROS MÓDULOS
+
+core - tenant_id referencia core.Tenants
+
+auth - user_id referencia auth.Users
+
+mtrk - Pode registrar criação e alteração de campanhas
+
+mkt - Pode registrar importações e alterações de listas
+
+ops - Pode registrar alterações de provedores e identidades
+
+lead - Pode registrar exportação ou exclusão de leads
+
+------------------------------------------------------------------------
+
+DIFERENÇA ENTRE audit E mtrk
+
+audit: Registra ações administrativas do sistema.
+
+mtrk: Registra eventos de campanha (sent, open, click, bounce etc).
+
+------------------------------------------------------------------------
+
+FLUXOS REAIS
+
+Criar campanha: - Salva em mtrk.Campanhas - Registra em audit.AuditLogs:
+action=CREATE_CAMPAIGN entity_type=campaign entity_id=cid
+
+Importar CSV: - Cria mkt.ImportJobs - Registra: action=IMPORT_CSV
+entity_type=audience meta_json com file_hash e estatísticas
+
+Alterar permissões: - Atualiza auth.RolePermissions - Registra:
+action=UPDATE_ROLE_PERMISSIONS entity_type=role
+
+------------------------------------------------------------------------
+
+PRINCÍPIOS IMPORTANTES
+
+-   Logs nunca devem ser apagados manualmente
+-   Logs nunca devem ser editáveis
+-   Deve haver índices por tenant_id e created_at
+-   Pode haver política de retenção controlada
+
+------------------------------------------------------------------------
+
+PRINCÍPIO ARQUITETURAL
+
+mtrk mede comportamento externo (clientes e campanhas). audit mede
+comportamento interno (usuários do sistema).
+
+Esse módulo eleva o nível de maturidade e profissionalismo do sistema.
